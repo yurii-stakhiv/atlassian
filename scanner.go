@@ -6,7 +6,11 @@ import (
 	"io"
 )
 
-var defautlParsers = []Parser{&MentionParser{}, &EmoticonParser{}, &LinkParser{}}
+var defautlParsers = []Parser{
+	&SimpleParser{"emoticon", emoticonRe},
+	&SimpleParser{"mention", mentionRe},
+	&LinkParser{},
+}
 
 type TokenMap map[string][]Token
 type Set map[string]bool
@@ -40,23 +44,25 @@ func (s *Scanner) Scan(r io.Reader) (TokenMap, error) {
 		}
 
 		for _, p := range s.parsers {
-			token, ok := p.Parse(word)
+			tokens, ok := p.Parse(word)
 			if !ok {
 				continue
 			}
-			// Not sure if deduplication is needed
-			key := token.Type() + ":" + token.ID()
-			if set[key] {
-				continue
-			}
-			set[key] = true
 
-			if token.Process(asyncRes) {
-				asyncCount++
-			} else {
-				m[token.Type()] = append(m[token.Type()], token)
+			for _, token := range tokens {
+				// Not sure if deduplication is needed
+				key := token.Type() + ":" + token.ID()
+				if set[key] {
+					continue
+				}
+				set[key] = true
+
+				if token.Process(asyncRes) {
+					asyncCount++
+				} else {
+					m[token.Type()] = append(m[token.Type()], token)
+				}
 			}
-			break
 		}
 	}
 

@@ -1,9 +1,13 @@
 package tokenizer
 
 import (
-	"bytes"
-	"net/url"
 	"regexp"
+)
+
+var (
+	mentionRe  = regexp.MustCompile("@([A-Za-z0-9]+)($|[!,\\.;])")
+	emoticonRe = regexp.MustCompile("\\(([A-Za-z0-9]{1,15})\\)")
+	linkRe     = regexp.MustCompile("(https?://)?([\\da-z\\.-]+)\\.([a-z\\.]{2,6})([/\\w \\.-]*)*/?")
 )
 
 type AsyncRes struct {
@@ -18,71 +22,48 @@ type Token interface {
 }
 
 type Parser interface {
-	Parse([]byte) (Token, bool)
+	Parse([]byte) ([]Token, bool)
 }
 
-type Mention string
-
-func (m Mention) ID() string {
-	return string(m)
+type SimpleToken struct {
+	val  string
+	kind string
 }
 
-func (m Mention) Process(chan<- *AsyncRes) bool {
+func (t *SimpleToken) ID() string {
+	return t.val
+}
+
+func (t *SimpleToken) Process(chan<- *AsyncRes) bool {
 	return false
 }
 
-func (m Mention) Type() string {
-	return "mentions"
+func (t *SimpleToken) Type() string {
+	return t.kind
 }
 
-type MentionParser struct {
+func (t *SimpleToken) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + t.val + "\""), nil
 }
 
-func (p *MentionParser) Parse(b []byte) (Token, bool) {
-	if len(b) < 2 {
+type SimpleParser struct {
+	Type string
+	Re   *regexp.Regexp
+}
+
+func (p *SimpleParser) Parse(b []byte) ([]Token, bool) {
+	f := p.Re.FindAllStringSubmatch(string(b), -1)
+	if len(f) == 0 {
 		return nil, false
 	}
 
-	if b[0] != '@' {
-		return nil, false
+	res := make([]Token, 0, len(f))
+	for _, i := range f {
+		res = append(res, &SimpleToken{i[1], p.Type})
 	}
 
-	idx := -1
-	for i, v := range b {
-		if v == '@' {
-			idx = i
-		} else {
-			break
-		}
-	}
+	return res, true
 
-	return Mention(b[idx+1:]), true
-}
-
-type Emoticon string
-
-func (e Emoticon) ID() string {
-	return string(e)
-}
-
-func (e Emoticon) Process(chan<- *AsyncRes) bool {
-	return false
-}
-
-func (e Emoticon) Type() string {
-	return "emoticons"
-}
-
-type EmoticonParser struct {
-}
-
-var emoticonRe = regexp.MustCompile("^\\([A-Za-z0-9]{1,15}\\)$")
-
-func (p *EmoticonParser) Parse(b []byte) (Token, bool) {
-	if !emoticonRe.Match(b) {
-		return nil, false
-	}
-	return Emoticon(b[1 : len(b)-1]), true
 }
 
 type LinkToken struct {
@@ -121,31 +102,21 @@ type LinkParser struct {
 	fetcher TitleFetcher
 }
 
-var httpPrefix = []byte("http://")
-var httpsPrefix = []byte("https://")
-
-func (p *LinkParser) valid(b []byte) (string, bool) {
-	if !bytes.HasPrefix(b, httpPrefix) && !bytes.HasPrefix(b, httpsPrefix) {
-		return "", false
-	}
-	stringUrl := string(b)
-	_, err := url.Parse(stringUrl)
-	if err != nil {
-		return "", false
-	}
-
-	return stringUrl, true
-}
-
-func (p *LinkParser) Parse(b []byte) (Token, bool) {
-	url, ok := p.valid(b)
-	if !ok {
+func (p *LinkParser) Parse(b []byte) ([]Token, bool) {
+	f := linkRe.FindAll(b, -1)
+	if len(f) == 0 {
 		return nil, false
 	}
+
 	fetcher := p.fetcher
 	if fetcher == nil {
 		fetcher = defaultFetcher
 	}
 
-	return &LinkToken{url, "", fetcher}, true
+	res := make([]Token, 0, len(f))
+	for _, i := range f {
+		res = append(res, &LinkToken{Url: string(i), fetcher: fetcher})
+	}
+
+	return res, true
 }

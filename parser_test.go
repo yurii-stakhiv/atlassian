@@ -14,25 +14,28 @@ var mentionCases = []testCase{
 	{"@user", "user", true},
 	{"@@user", "user", true},
 	{"@@@user", "user", true},
-	{"@@asdf@user", "asdf@user", true},
-	{"asdf@user", "", false},
+	{"@@asdf@user", "user", true},
+	{"asdf@user", "user", true},
 	{"asdf", "", false},
 	{"@", "", false},
 	{"", "", false},
 }
 
 func TestMentionParser(t *testing.T) {
-	p := MentionParser{}
+	p := SimpleParser{"mention", mentionRe}
 
 	for _, testCase := range mentionCases {
-		res, ok := p.Parse([]byte(testCase.in))
+		tokens, ok := p.Parse([]byte(testCase.in))
 		if testCase.ok != ok {
 			t.Errorf("Expected '%s' parse result to be '%t'", testCase.in, testCase.ok)
 			continue
 		}
 
-		if ok && res != Mention(testCase.expected) {
-			t.Fatalf("Expected res to equal '%s', got '%s'", testCase.expected, res)
+		if ok {
+			res := tokens[0]
+			if res.ID() != testCase.expected {
+				t.Fatalf("Expected res to equal '%s', got '%s'", testCase.expected, res.ID())
+			}
 		}
 	}
 }
@@ -48,17 +51,20 @@ var emoticonCases = []testCase{
 }
 
 func TestEmoticonParser(t *testing.T) {
-	p := EmoticonParser{}
+	p := SimpleParser{"emoticon", emoticonRe}
 
 	for _, testCase := range emoticonCases {
-		res, ok := p.Parse([]byte(testCase.in))
+		tokens, ok := p.Parse([]byte(testCase.in))
 		if testCase.ok != ok {
 			t.Errorf("Expected '%s' parse result to be '%t'", testCase.in, testCase.ok)
 			continue
 		}
 
-		if ok && res != Emoticon(testCase.expected) {
-			t.Fatalf("Expected res to equal '%s', got '%s'", testCase.expected, res)
+		if ok {
+			res := tokens[0]
+			if res.ID() != testCase.expected {
+				t.Fatalf("Expected res to equal '%s', got '%s'", testCase.expected, res)
+			}
 		}
 	}
 
@@ -77,7 +83,7 @@ var linkCases = []testCase{
 	{"http://link.com", "test title", true},
 	{"https://link.com", "test title", true},
 	{"asdf", "test title", false},
-	{"google.com", "test title", false},
+	{"google.com", "test title", true},
 }
 
 func TestLinkParser(t *testing.T) {
@@ -85,13 +91,14 @@ func TestLinkParser(t *testing.T) {
 	p := &LinkParser{f}
 
 	for _, testCase := range linkCases {
-		res, ok := p.Parse([]byte(testCase.in))
+		tokens, ok := p.Parse([]byte(testCase.in))
 		if testCase.ok != ok {
 			t.Errorf("Expected '%s' parse result to be '%t'", testCase.in, testCase.ok)
 			continue
 		}
 
 		if ok {
+			res := tokens[0]
 			c := make(chan *AsyncRes, 1)
 			res.Process(c)
 			<-c
