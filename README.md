@@ -6,7 +6,7 @@
 
 # Command line
 
-    cd $GOPATH/github.com/yurii-stakhiv/atlassian/cmd
+    cd $GOPATH/src/github.com/yurii-stakhiv/atlassian/cmd
     go build
 
 Usage
@@ -16,7 +16,7 @@ Usage
 
 # API
 
-    cd $GOPATH/github.com/yurii-stakhiv/atlassian/server
+    cd $GOPATH/src/github.com/yurii-stakhiv/atlassian/server
     go build
 
 Usage
